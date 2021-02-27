@@ -20,13 +20,14 @@ Simple time relay based on ESP32 + MicroPython
 
 - All logic based on classes
 
-Hardware:
+## Hardware
 
 - ESP-WROOM-32
 
 - Relay 200v
 
-- LCD Display 2004a 20x4 https://www.beta-estore.com/download/rk/RK-10290_410.pdf
+- LCD Display 2004a 20x4
+  (https://www.beta-estore.com/download/rk/RK-10290_410.pdf)
 
 - Encoder
 
