@@ -35,7 +35,7 @@ Simple time relay based on ESP32 + MicroPython
 
 ## Scheme
 
-... IMAGE TODO...
+![scheme](./img/scheme.png)
 
 ## Used external libs
 
