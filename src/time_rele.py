@@ -5,6 +5,7 @@ from machine import I2C, Pin, Timer, RTC, reset
 from machine_i2c_lcd import I2cLcd
 
 LED_PIN = const(23)
+LINE_PIN = const(26)
 DISPLAY_SCL_PIN = const(22)
 DISPLAY_SDA_PIN = const(21)
 RELAY_PIN = const(10)
@@ -149,6 +150,7 @@ class Program(RObject):
         super(Program, self).__init__()
         self.state = 0
         self.led = Pin(LED_PIN, Pin.OUT)
+        self.power = Pin(LINE_PIN, Pin.OUT)
         self.led.value(0)
         self.rtc = RTC()
         self.timer = None
@@ -225,29 +227,31 @@ class Program(RObject):
         elif event == 'stop':
             self.stop_timer()
             self.set_state(self.STATE_STOPPED)
-            self.power(OFF)
+            self.set_power(OFF)
             self.eta = 0
         elif event == 'start':
             if self.start_timer():
                 self.set_state(self.STATE_ONLINE)
-                self.power(ON)
+                self.set_power(ON)
         elif event == 'restart':
             self.emit('stop')
             self.emit('start')
         elif event == 'reset':
             self.stop_timer()
             self.set_state(self.STATE_STOPPED)
-            self.power(OFF)
+            self.set_power(OFF)
         elif event == 'reboot':
             reset()
 
     def on_state_triggered(self, state=0):
         self.rest_rtc()
         self.set_state(state)
-        self.power(max(0, state-1))
+        self.set_power(max(0, state - 1))
 
-    def power(self, value=False):
-        self.led.value(int(bool(value)))
+    def set_power(self, value=False):
+        v = int(bool(value))
+        self.led.value(v)
+        self.power.value(v)
 
 
 class Controller(RObject):
