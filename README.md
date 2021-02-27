@@ -37,6 +37,24 @@ Simple time relay based on ESP32 + MicroPython
 
 ![scheme](./img/scheme.png)
 
+| Pin on part   | Pin on ESP32  |
+| ------------- |:-------------:|
+| LED +         | D23           |
+| LED -         | RESISTOR      |
+| RESISTOR      | GND			|
+| ENC +			| VCC			|
+| ENC -			| GND			|
+| ENC CLK		| D14			|
+| ENC DT		| D13			|
+| ENC SW		| D27			|
+| RELAY +		| VCC			|
+| RELAY -		| GND			|
+| RELAY SIGNAL  | D26			|
+| LCD VCC		| VCC			|
+| LCD GND		| GND			|
+| LCD SDA		| D21			|
+| LCD CSL		| D22			|
+
 ## Used external libs
 
 - encoderLib.py
