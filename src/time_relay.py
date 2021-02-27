@@ -92,11 +92,9 @@ class Display(RObject):
         self.lcd.clear()
 
     def off(self):
-        print('LCD OFF')
         self.lcd.backlight_off()
 
     def on(self):
-        print('LCD ON')
         self.lcd.backlight_on()
 
     def receive(self, event, *args):
@@ -459,7 +457,7 @@ class ControllerTitle(Controller):
     """First line controller"""
     selectable = False
     title_list = {
-        Program.STATE_STOPPED: ' OFFLINE '.center(18).replace(' ', '='),
+        Program.STATE_STOPPED: 'OFFLINE'.center(18).replace(' ', '='),
         Program.STATE_ONLINE:  '==ON===',
         Program.STATE_OFFLINE: '==OFF==',
     }
@@ -475,8 +473,9 @@ class ControllerTitle(Controller):
     def get_value(self):
         if self.mode == Program.STATE_STOPPED:
             return ''
-        # TODO full line with hours
-        return '00:00:{:02d}'.format(self.eta)
+        m, s = divmod(self.eta, 60)
+        h, m = divmod(m, 60)
+        return '{:02d}:{:02d}:{:02d}'.format(h, m, s)
 
     def receive(self, event, *args):
         if event == 'update_eta':
