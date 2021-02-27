@@ -16,7 +16,7 @@ Simple time relay based on ESP32 + MicroPython
 
 ## Code features
 
-- Simple implementation of event-listener system
+- Simple implementation of event system
 
 - All logic based on classes
 
