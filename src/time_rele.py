@@ -1,9 +1,10 @@
 import encoderLib
 import time
 from micropython import const
-from machine import I2C, Pin, Timer, RTC, reset
+from machine import I2C, Pin, Timer, RTC as _RTC, reset
 from machine_i2c_lcd import I2cLcd
 
+# constants
 LED_PIN = const(23)
 LINE_PIN = const(26)
 DISPLAY_SCL_PIN = const(22)
@@ -11,12 +12,21 @@ DISPLAY_SDA_PIN = const(21)
 RELAY_PIN = const(10)
 ON = const(1)
 OFF = const(0)
+# Init real time clock
+RTC = _RTC()
+RTC.datetime((2020, 1, 1, 0, 0, 0, 0, 0))
 
 
 class RObject:
     """Base object for event engine"""
+    _objects = []
+
     def __init__(self):
         self.__events = []
+        self.__class__._objects.append(self)
+
+    def get_objects(self):
+        return self.__class__._objects
 
     @property
     def events(self):
@@ -81,8 +91,64 @@ class Display(RObject):
     def clear(self):
         self.lcd.clear()
 
+    def off(self):
+        print('LCD OFF')
+        self.lcd.backlight_off()
+
+    def on(self):
+        print('LCD ON')
+        self.lcd.backlight_on()
+
+    def receive(self, event, *args):
+        if event == 'idle_off':
+            self.on()
+        elif event == 'idle_on':
+            self.off()
+
 
 LCD = Display()
+
+
+class IdleTimer(RObject):
+    """IDLE timer to switch ON/OFF of display"""
+    IDLE_TIMEOUT = const(30)
+
+    def __init__(self):
+        super(IdleTimer, self).__init__()
+        self.idle_timer = Timer(5)
+        self.is_idle = False
+        self.last_active = time.time()
+        self.start_idle_timer()
+
+    def start_idle_timer(self):
+        self.idle_timer.init(period=self.IDLE_TIMEOUT * 1000, mode=Timer.PERIODIC, callback=self.on_idle_timeout)
+        self.is_idle = False
+        self.emit('idle_off')
+
+    def on_idle_timeout(self, *args):
+        if self.is_idle:
+            return
+        current = time.time()
+        expire_time = current - self.last_active
+        if expire_time > self.IDLE_TIMEOUT:
+            self.idle_on()
+
+    def idle_on(self):
+        self.emit('idle_on')
+        self.is_idle = True
+
+    def idle_off(self):
+        self.emit('idle_off')
+        self.is_idle = False
+
+    def receive(self, event, *args):
+        if event == 'on_key_event':
+            # mve or click encoder to exit idle mode
+            self.last_active = time.time()
+            if self.is_idle:
+                self.idle_off()
+        if event == 'stop':
+            self.idle_timer.deinit()
 
 
 class Events(RObject):
@@ -97,23 +163,32 @@ class Events(RObject):
         # values
         self.last_enc_value = 0
         self.last_btn_value = 1
-        self.objects = []
+        # self.objects = [self]
+        self._is_idle_mode = False
+
         # callbacks
         self.ol_clb = on_left
         self.or_clb = on_right
         self.op_clb = on_press
 
-    def set_objects(self, *args):
-        self.objects = args
-
     def on_left(self):
-        self.ol_clb()
+        if not self._is_idle_mode:
+            self.ol_clb()
+        self.on_any_event()
 
     def on_right(self):
-        self.or_clb()
+        if not self._is_idle_mode:
+            self.or_clb()
+        self.on_any_event()
 
     def on_press(self):
-        self.op_clb()
+        if not self._is_idle_mode:
+            self.op_clb()
+        self.on_any_event()
+
+    def on_any_event(self):
+        self.emit('on_key_event')
+        self._is_idle_mode = False
 
     def update(self):
         # encoder
@@ -131,13 +206,18 @@ class Events(RObject):
                 self.on_press()
             self.last_btn_value = btn_value
         # delivery events
-        for item in self.objects:
+        objects = self.get_objects()
+        for item in objects:
             e = item.events
             if e:
                 while e:
                     ev = e.pop()
-                    for c in self.objects:
+                    for c in objects:
                         c.receive(ev[0], *ev[1])
+
+    def receive(self, event, *args):
+        if event == 'idle_on':
+            self._is_idle_mode = True
 
 
 class Program(RObject):
@@ -152,11 +232,11 @@ class Program(RObject):
         self.led = Pin(LED_PIN, Pin.OUT)
         self.power = Pin(LINE_PIN, Pin.OUT)
         self.led.value(0)
-        self.rtc = RTC()
         self.timer = None
         self.on_time = 0
         self.off_time = 0
         self.eta = 0
+        self.last_checked_time = 0
         self.set_state(self.STATE_STOPPED)
 
     def start_timer(self):
@@ -191,28 +271,21 @@ class Program(RObject):
         self.emit('set_state', self.state)
 
     def rest_rtc(self):
-        self.rtc.datetime((2020, 1, 1, 0, 0, 0, 0, 0))
+        self.last_checked_time = time.time()
         self.eta = 0
-
-    def _get_time_offset(self):
-        if not self.timer:
-            return 0
-        _, _, _, _, h, m, s, _ = self.rtc.datetime()
-        return (h * 60 * 60) + (m * 60) + s
 
     def update_handler(self, *args):
         # get current time offset
-        total_sec = self._get_time_offset()
-        # compute eta
+        offs = time.time() - self.last_checked_time
         if self.state == self.STATE_ONLINE:
-            self.eta = self.on_time - total_sec
-            if total_sec >= self.on_time:
-                # if self.eta == 0:
+            # compute eta
+            self.eta = self.on_time - offs
+            if offs >= self.on_time:
                 self.on_state_triggered(self.STATE_OFFLINE)
         elif self.state == self.STATE_OFFLINE:
-            self.eta = self.off_time - total_sec
-            if total_sec >= self.off_time:
-                # if self.eta == 0:
+            # compute eta
+            self.eta = self.off_time - offs
+            if offs >= self.off_time:
                 self.on_state_triggered(self.STATE_ONLINE)
         self.update_display()
 
@@ -304,14 +377,13 @@ class Menu(RObject):
     MODE_SELECT = const(0)
     MODE_EDIT = const(1)
 
-    def __init__(self, items, core):
+    def __init__(self, items):
         super(Menu, self).__init__()
         if not len(items) == 4:
             raise ValueError
         self.items = items
         for i, item in enumerate(self.items):
             item.set_line(i)
-        self.core = core
         self.max_index = len(self.items) - 1
         self.current_index = self.items.index([x for x in self.items if x.selectable][0])
         self.mode = self.MODE_SELECT
@@ -383,21 +455,6 @@ class Menu(RObject):
             self.render_menu()
 
 
-class EventLoop:
-    """Events sender"""
-    def __init__(self, objects):
-        self.objects = objects
-
-    def apply_events(self):
-        for item in self.objects:
-            e = item.events
-            if e:
-                while e:
-                    ev = e.pop()
-                    for c in self.objects:
-                        c.receive(ev[0], *ev[1])
-
-
 class ControllerTitle(Controller):
     """First line controller"""
     selectable = False
@@ -463,7 +520,7 @@ class ControllerTime(Controller):
 
     def on_exit(self):
         if self.event_name:
-            self.emit(self.event_name, self.time)
+            self.emit(self.event_name, self.time*60)
 
     # def on_exit(self):
     #     # TODO: save to flash
@@ -544,23 +601,25 @@ class ControllerActions(Controller):
 
 
 def main():
-    items = [
-        ControllerTitle(), ControllerOnline(), ControllerOffline(), ControllerActions()
-    ]
     core = Program()
-    menu = Menu(items, core)
+    items = [
+        ControllerTitle(), ControllerOnline(5), ControllerOffline(5), ControllerActions()
+    ]
+    menu = Menu(items)
+    idle = IdleTimer()
     events = Events(
         on_left=menu.on_left,
         on_right=menu.on_right,
         on_press=menu.on_press
     )
     menu.render_menu()
-    events.set_objects(LCD, menu, core, *menu.items)
 
+    # Main loop
     while True:
-        # Main loop
         try:
             events.update()
             time.sleep(0.05)
         except KeyboardInterrupt:
+            events.emit('stop')
+            events.update()
             break
