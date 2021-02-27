@@ -35,7 +35,7 @@ Simple time relay based on ESP32 + MicroPython
 
 ## Scheme
 
-![scheme](./img/scheme.png)
+![scheme](./img/wiring_scheme.png)
 
 | Pin on part   | Pin on ESP32  |
 | ------------- |:-------------:|
