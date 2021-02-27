@@ -31,7 +31,7 @@ Simple time relay based on ESP32 + MicroPython
 
 - Encoder
 
-- LED
+- LED + Resistor 220 ohm
 
 ## Scheme
 
