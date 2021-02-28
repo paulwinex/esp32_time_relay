@@ -30,6 +30,8 @@ Simple time relay based on ESP32 + MicroPython
 
   https://www.beta-estore.com/download/rk/RK-10290_410.pdf
 
+- I2C adapter for LCD
+
 - Encoder with button
 
 - LED (x2)
@@ -82,3 +84,38 @@ Simple time relay based on ESP32 + MicroPython
 4. Upload main.py and time_relay.py to ESP32
 
 5. Reboot
+
+
+## Main Menu
+
+### Line 1: State
+
+OFFLINE
+
+    Timer is off, nothing happens
+
+ON
+
+    Timer with POWER ON is in progress
+
+OFF
+
+    Timer with POWER OFF in progress
+
+### Line 2: POWER ON Timer
+
+    Setup POWER ON timer
+
+### Line 3: POWER OFF Timer
+
+    Setup POWER OFF timer
+
+### Line 4: Actions
+
+    START ON - start loop from ON state
+    START OFF - start loop from OFF state
+    STOP - stop timer
+    NEXT - switch to next timer now
+    RESET - stop and reset timers to 0
+    REBOOT - reboot device
+    <= - back to main menu (not action)
