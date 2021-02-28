@@ -90,32 +90,39 @@ Simple time relay based on ESP32 + MicroPython
 
 ### Line 1: State
 
-OFFLINE
+- OFFLINE
 
     Timer is off, nothing happens
 
-ON
+- ON
 
     Timer with POWER ON is in progress
 
-OFF
+- OFF
 
     Timer with POWER OFF in progress
 
 ### Line 2: POWER ON Timer
 
-    Setup POWER ON timer
+Setup POWER ON timer
 
 ### Line 3: POWER OFF Timer
 
-    Setup POWER OFF timer
+Setup POWER OFF timer
 
 ### Line 4: Actions
 
-    START ON - start loop from ON state
-    START OFF - start loop from OFF state
-    STOP - stop timer
-    NEXT - switch to next timer now
-    RESET - stop and reset timers to 0
-    REBOOT - reboot device
-    <= - back to main menu (not action)
+- START ON - start loop from ON state
+
+- START OFF - start loop from OFF state
+
+- STOP - stop timer
+
+- NEXT - switch to next timer now
+
+- RESET - stop and reset timers to 0
+
+- REBOOT - reboot device
+
+- <= - back to main menu (not action)
+
