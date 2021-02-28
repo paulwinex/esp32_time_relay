@@ -18,15 +18,12 @@ RTC.datetime((2020, 1, 1, 0, 0, 0, 0, 0))
 
 
 class RObject:
-    """Base object for event engine"""
+    """Base object for event system"""
     _objects = []
 
     def __init__(self):
         self.__events = []
         self.__class__._objects.append(self)
-
-    def get_objects(self):
-        return self.__class__._objects
 
     @property
     def events(self):
@@ -37,6 +34,21 @@ class RObject:
 
     def receive(self, event, *args):
         pass
+
+    @classmethod
+    def get_objects(cls):
+        return cls._objects
+
+    @classmethod
+    def process_events(cls):
+        objects = cls.get_objects()
+        for item in objects:
+            e = item.events
+            if e:
+                while e:
+                    ev = e.pop()
+                    for c in objects:
+                        c.receive(ev[0], *ev[1])
 
 
 class Display(RObject):
@@ -110,6 +122,7 @@ LCD = Display()
 class IdleTimer(RObject):
     """IDLE timer to switch ON/OFF of display"""
     IDLE_TIMEOUT = const(30)
+    TIMEOUT_CHECK = const(10)
 
     def __init__(self):
         super(IdleTimer, self).__init__()
@@ -119,7 +132,7 @@ class IdleTimer(RObject):
         self.start_idle_timer()
 
     def start_idle_timer(self):
-        self.idle_timer.init(period=self.IDLE_TIMEOUT * 1000, mode=Timer.PERIODIC, callback=self.on_idle_timeout)
+        self.idle_timer.init(period=self.TIMEOUT_CHECK * 1000, mode=Timer.PERIODIC, callback=self.on_idle_timeout)
         self.is_idle = False
         self.emit('idle_off')
 
@@ -203,15 +216,6 @@ class Events(RObject):
             if btn_value == 0:
                 self.on_press()
             self.last_btn_value = btn_value
-        # delivery events
-        objects = self.get_objects()
-        for item in objects:
-            e = item.events
-            if e:
-                while e:
-                    ev = e.pop()
-                    for c in objects:
-                        c.receive(ev[0], *ev[1])
 
     def receive(self, event, *args):
         if event == 'idle_on':
@@ -547,7 +551,7 @@ class ControllerActions(Controller):
     actions_base = ['RESET', 'REBOOT', null_action]
     actions = {
         0: ['START']+actions_base,
-        1: ['STOP']+actions_base,
+        1: ['STOP', 'SWITCH']+actions_base,
     }
 
     def __init__(self):
@@ -616,7 +620,10 @@ def main():
     # Main loop
     while True:
         try:
+            # check device events
             events.update()
+            # delivery events
+            RObject.process_events()
             time.sleep(0.05)
         except KeyboardInterrupt:
             events.emit('stop')
