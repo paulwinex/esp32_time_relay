@@ -20,6 +20,7 @@ RTC.datetime((2020, 1, 1, 0, 0, 0, 0, 0))
 
 
 class Store:
+    """Class for storing/reading config on the flash"""
     file_path = 'options.json'
 
     @classmethod
@@ -222,14 +223,13 @@ class Events(RObject):
 
     def __init__(self, on_left, on_right, on_press):
         super(Events, self).__init__()
+        # parts
         self._btn = Pin(self.BTN_PIN, Pin.IN, Pin.PULL_UP)
         self._enc = encoderLib.encoder(self.ENC_PIN[0], self.ENC_PIN[1])
         # values
         self.last_enc_value = 0
         self.last_btn_value = 1
-        # self.objects = [self]
         self._is_idle_mode = False
-
         # callbacks
         self.ol_clb = on_left
         self.or_clb = on_right
@@ -284,9 +284,11 @@ class Program(RObject):
     def __init__(self):
         super(Program, self).__init__()
         self.state = 0
+        # parts
         self.led_on = Pin(LED_ON_PIN, Pin.OUT)
         self.led_off = Pin(LED_OFF_PIN, Pin.OUT)
         self.power = Pin(LINE_PIN, Pin.OUT)
+        # values
         self.led_on.value(0)
         self.led_off.value(0)
         self.timer = None
@@ -294,6 +296,7 @@ class Program(RObject):
         self.off_time = 0
         self.eta = 0
         self.last_checked_time = 0
+        # init
         self.set_state(self.STATE_STOPPED)
 
     def start_timer(self):
@@ -347,6 +350,7 @@ class Program(RObject):
         self.update_display()
 
     def update_display(self):
+        # rerender tittle signal
         self.emit('update_eta', self.eta)
 
     def receive(self, event, *args):
@@ -369,9 +373,7 @@ class Program(RObject):
             self.emit('start')
         elif event == 'reset':
             Store.clear()
-            self.stop_timer()
-            self.set_state(self.STATE_STOPPED)
-            self.set_power(OFF)
+            self.stop()
         elif event == 'reboot':
             self.stop()
             RObject.process_events()
