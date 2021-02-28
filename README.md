@@ -27,20 +27,25 @@ Simple time relay based on ESP32 + MicroPython
 - Relay 200v
 
 - LCD Display 2004a 20x4
-  (https://www.beta-estore.com/download/rk/RK-10290_410.pdf)
 
-- Encoder
+  https://www.beta-estore.com/download/rk/RK-10290_410.pdf
 
-- LED + Resistor 220 ohm
+- Encoder with button
+
+- LED (x2)
+
+- Resistor 220 ohm (x2)
 
 ## Scheme
 
-![scheme](./img/wiring_scheme.png)
+![scheme](./img/relay_wiring_scheme.png)
 
 | Pin on part   | Pin on ESP32  |
 | ------------- |:-------------:|
-| LED +         | D23           |
-| LED -         | RESISTOR      |
+| LED1 +        | D23           |
+| LED1 -        | RESISTOR      |
+| LED2 +        | D4            |
+| LED2 -        | RESISTOR      |
 | RESISTOR      | GND			|
 | ENC +			| VCC			|
 | ENC -			| GND			|

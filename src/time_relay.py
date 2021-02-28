@@ -1,11 +1,13 @@
 import encoderLib
-import time
+import time, os
 from micropython import const
 from machine import I2C, Pin, Timer, RTC as _RTC, reset
 from machine_i2c_lcd import I2cLcd
+import json
 
 # constants
-LED_PIN = const(23)
+LED_ON_PIN = const(23)
+LED_OFF_PIN = const(4)
 LINE_PIN = const(26)
 DISPLAY_SCL_PIN = const(22)
 DISPLAY_SDA_PIN = const(21)
@@ -15,6 +17,57 @@ OFF = const(0)
 # Init real time clock
 RTC = _RTC()
 RTC.datetime((2020, 1, 1, 0, 0, 0, 0, 0))
+
+
+class Store:
+    file_path = 'options.json'
+
+    @classmethod
+    def get(cls, key, default=None):
+        return cls._read().get(key, default)
+
+    @classmethod
+    def set(cls, key, value):
+        data = cls._read()
+        data[key] = value
+        cls._write(data)
+
+    @classmethod
+    def rem(cls, key):
+        data = cls._read()
+        if key in data:
+            del data[key]
+        cls._write(data)
+
+    @classmethod
+    def clear(cls):
+        try:
+            os.remove(cls.file_path)
+        except OSError:
+            pass
+
+    @classmethod
+    def _read(cls):
+        try:
+            f = open(cls.file_path)
+        except OSError:
+            return {}
+        try:
+            data = json.loads(f.read())
+        except ValueError:
+            return {}
+        f.close()
+        return data
+
+    @classmethod
+    def _write(cls, data):
+        try:
+            f = open(cls.file_path, 'w')
+            f.write(json.dumps(data))
+            f.close()
+            return True
+        except ValueError:
+            return False
 
 
 class RObject:
@@ -231,9 +284,11 @@ class Program(RObject):
     def __init__(self):
         super(Program, self).__init__()
         self.state = 0
-        self.led = Pin(LED_PIN, Pin.OUT)
+        self.led_on = Pin(LED_ON_PIN, Pin.OUT)
+        self.led_off = Pin(LED_OFF_PIN, Pin.OUT)
         self.power = Pin(LINE_PIN, Pin.OUT)
-        self.led.value(0)
+        self.led_on.value(0)
+        self.led_off.value(0)
         self.timer = None
         self.on_time = 0
         self.off_time = 0
@@ -276,18 +331,18 @@ class Program(RObject):
         self.last_checked_time = time.time()
         self.eta = 0
 
-    def update_handler(self, *args):
+    def update_handler(self, *args, force_switch=False):
         # get current time offset
         offs = time.time() - self.last_checked_time
         if self.state == self.STATE_ONLINE:
             # compute eta
             self.eta = self.on_time - offs
-            if offs >= self.on_time:
+            if offs >= self.on_time or force_switch:
                 self.on_state_triggered(self.STATE_OFFLINE)
         elif self.state == self.STATE_OFFLINE:
             # compute eta
             self.eta = self.off_time - offs
-            if offs >= self.off_time:
+            if offs >= self.off_time or force_switch:
                 self.on_state_triggered(self.STATE_ONLINE)
         self.update_display()
 
@@ -300,33 +355,49 @@ class Program(RObject):
         elif event == 'offline_changed':
             self.off_time = args[0]
         elif event == 'stop':
-            self.stop_timer()
-            self.set_state(self.STATE_STOPPED)
-            self.set_power(OFF)
-            self.eta = 0
-        elif event == 'start':
+            self.stop()
+        elif event == 'start_on':
             if self.start_timer():
                 self.set_state(self.STATE_ONLINE)
                 self.set_power(ON)
+        elif event == 'start_off':
+            if self.start_timer():
+                self.set_state(self.STATE_OFFLINE)
+                self.set_power(OFF)
         elif event == 'restart':
             self.emit('stop')
             self.emit('start')
         elif event == 'reset':
+            Store.clear()
             self.stop_timer()
             self.set_state(self.STATE_STOPPED)
             self.set_power(OFF)
         elif event == 'reboot':
+            self.stop()
+            RObject.process_events()
             reset()
+        elif event == 'next':
+            self.update_handler(force_switch=True)
 
     def on_state_triggered(self, state=0):
         self.rest_rtc()
         self.set_state(state)
         self.set_power(max(0, state - 1))
 
-    def set_power(self, value=False):
+    def set_power(self, value=False, led_off_value=None):
         v = int(bool(value))
-        self.led.value(v)
+        self.led_on.value(v)
+        if led_off_value is not None:
+            self.led_off.value(led_off_value)
+        else:
+            self.led_off.value(int(not v))
         self.power.value(v)
+
+    def stop(self):
+        self.stop_timer()
+        self.set_state(self.STATE_STOPPED)
+        self.set_power(OFF, OFF)
+        self.eta = 0
 
 
 class Controller(RObject):
@@ -495,10 +566,17 @@ class ControllerTime(Controller):
     title = 'TIME'
     event_name = ''
 
-    def __init__(self, init_time=0):
+    def __init__(self, init_time=None):
         super(ControllerTime, self).__init__()
-        self.time = init_time
+        self.time = self.restore_value(init_time)
         self.on_exit()
+
+    def restore_value(self, init_time=None):
+        if self.event_name:
+            t = Store.get(self.event_name) or init_time
+        else:
+            t = init_time
+        return t or 0
 
     def get_value(self):
         h = self.time // 60
@@ -523,11 +601,8 @@ class ControllerTime(Controller):
 
     def on_exit(self):
         if self.event_name:
+            Store.set(self.event_name, self.time)
             self.emit(self.event_name, self.time*60)
-
-    # def on_exit(self):
-    #     # TODO: save to flash
-    #     pass
 
 
 class ControllerOnline(ControllerTime):
@@ -547,11 +622,11 @@ class ControllerActions(Controller):
     title = 'ACTION'
     MODE_ACTIVE = 1
     MODE_INACTIVE = 0
-    null_action = '<='
+    null_action = '<= '
     actions_base = ['RESET', 'REBOOT', null_action]
     actions = {
-        0: ['START']+actions_base,
-        1: ['STOP', 'SWITCH']+actions_base,
+        0: ['START ON', 'START OFF']+actions_base,
+        1: ['STOP', 'NEXT']+actions_base,
     }
 
     def __init__(self):
@@ -606,7 +681,7 @@ class ControllerActions(Controller):
 def main():
     core = Program()
     items = [
-        ControllerTitle(), ControllerOnline(5), ControllerOffline(5), ControllerActions()
+        ControllerTitle(), ControllerOnline(), ControllerOffline(), ControllerActions()
     ]
     menu = Menu(items)
     idle = IdleTimer()
