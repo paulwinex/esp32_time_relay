@@ -38,7 +38,7 @@ Simple time relay based on ESP32 + MicroPython
 
 - Resistor 220 ohm (x2)
 
-## Scheme
+## Schematic
 
 ![scheme](./img/relay_wiring_scheme.png)
 
@@ -75,7 +75,7 @@ Simple time relay based on ESP32 + MicroPython
 
 # How to install
 
-1. Connect on the breadboard or weld hardware as on scheme
+1. Connect on the breadboard or weld hardware as on schematic
 
 2. Flash MicroPython to ESP32
 
